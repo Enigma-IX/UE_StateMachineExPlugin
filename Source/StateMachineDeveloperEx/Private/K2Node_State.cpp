@@ -12,8 +12,6 @@
 #include "K2Node_IfThenElse.h"
 #include "K2Node_TemporaryVariable.h"
 
-#include "Runtime/Launch/Resources/Version.h"
-
 #define LOCTEXT_NAMESPACE "FStateMachineDeveloperExModule"
 
 UK2Node_State::UK2Node_State(const FObjectInitializer& ObjectInitializer)
@@ -64,7 +62,7 @@ void UK2Node_State::AllocateDefaultPins()
 {
 	const UEdGraphSchema_K2* K2Schema = GetDefault<UEdGraphSchema_K2>();
 
-	CreatePin(EGPD_Input, K2Schema->PC_Exec, FName(), nullptr, K2Schema->PN_Execute);
+	CreatePin(EGPD_Input, K2Schema->PC_Exec, UEdGraphSchema_K2::PN_Execute);
 
 	bool bExposeProxy = false;
 	for (const UStruct* TestStruct = ProxyClass; TestStruct; TestStruct = TestStruct->GetSuperStruct())
@@ -75,25 +73,25 @@ void UK2Node_State::AllocateDefaultPins()
 	// Optionally expose state class as pin
 	if (bExposeProxy)
 	{
-		CreatePin(EGPD_Output, K2Schema->PC_Object, FName(), ProxyClass, FBaseAsyncTaskHelper::GetAsyncTaskProxyName());
+		CreatePin(EGPD_Output, K2Schema->PC_Object, ProxyClass, FBaseAsyncTaskHelper::GetAsyncTaskProxyName());
 	}
 
 	// Create output exec pins for each event as well as any data output pins necessary for each event type.
-	for (TFieldIterator<UProperty> PropertyIt(ProxyClass); PropertyIt; ++PropertyIt)
+	for (TFieldIterator<FProperty> PropertyIt(ProxyClass); PropertyIt; ++PropertyIt)
 	{
-		if (UMulticastDelegateProperty* Property = Cast<UMulticastDelegateProperty>(*PropertyIt))
+		if (FMulticastDelegateProperty* Property = CastField<FMulticastDelegateProperty>(*PropertyIt))
 		{
-			CreatePin(EGPD_Output, K2Schema->PC_Exec, FName(), nullptr, *Property->GetName());
+			CreatePin(EGPD_Output, K2Schema->PC_Exec, *Property->GetName());
 			UFunction* DelegateSignatureFunction = Property->SignatureFunction;
 			if (IsValid(DelegateSignatureFunction))
 			{
-				for (TFieldIterator<UProperty> PropIt(DelegateSignatureFunction); PropIt && (PropIt->PropertyFlags & CPF_Parm); ++PropIt)
+				for (TFieldIterator<FProperty> PropIt(DelegateSignatureFunction); PropIt && (PropIt->PropertyFlags & CPF_Parm); ++PropIt)
 				{
-					UProperty* Param = *PropIt;
+					FProperty* Param = *PropIt;
 					const bool bIsFunctionInput = !Param->HasAnyPropertyFlags(CPF_OutParm) || Param->HasAnyPropertyFlags(CPF_ReferenceParm);
 					if (bIsFunctionInput)
 					{
-						UEdGraphPin* Pin = CreatePin(EGPD_Output, FName(), FName(), nullptr, Param->GetFName());
+						UEdGraphPin* Pin = CreatePin(EGPD_Output, NAME_None, Param->GetFName());
 						K2Schema->ConvertPropertyToPinType(Param, /*out*/ Pin->PinType);
 					}
 				}
@@ -108,9 +106,9 @@ void UK2Node_State::AllocateDefaultPins()
 	{
 		TSet<FName> PinsToHide;
 		FBlueprintEditorUtils::GetHiddenPinsForFunction(GetGraph(), ObjectConstructionFunction, PinsToHide);
-		for (TFieldIterator<UProperty> PropIt(ObjectConstructionFunction); PropIt && (PropIt->PropertyFlags & CPF_Parm); ++PropIt)
+		for (TFieldIterator<FProperty> PropIt(ObjectConstructionFunction); PropIt && (PropIt->PropertyFlags & CPF_Parm); ++PropIt)
 		{
-			UProperty* Param = *PropIt;
+			FProperty* Param = *PropIt;
 			const bool bIsFunctionInput = !Param->HasAnyPropertyFlags(CPF_OutParm) || Param->HasAnyPropertyFlags(CPF_ReferenceParm);
 			if (!bIsFunctionInput)
 			{
@@ -121,7 +119,7 @@ void UK2Node_State::AllocateDefaultPins()
 			const bool bIsRefParam = Param->HasAnyPropertyFlags(CPF_ReferenceParm) && bIsFunctionInput;
 			FCreatePinParams PinParams;
 			PinParams.bIsReference = bIsRefParam;
-			UEdGraphPin* Pin = CreatePin(EGPD_Input, FName(), FName(), nullptr, Param->GetFName(), PinParams);
+			UEdGraphPin* Pin = CreatePin(EGPD_Input, NAME_None, Param->GetFName(), PinParams);
 			const bool bPinGood = (Pin != nullptr) && K2Schema->ConvertPropertyToPinType(Param, /*out*/ Pin->PinType);
 
 			if (bPinGood)
@@ -165,11 +163,11 @@ void UK2Node_State::AllocateDefaultPins()
 	StateClassPin->DefaultObject = StateClass;
 
 	// Create input pins for state properties. These should be read and set on state enter.
-	for (TFieldIterator<UProperty> PropertyIt(StateClass, EFieldIteratorFlags::IncludeSuper); PropertyIt; ++PropertyIt)
+	for (TFieldIterator<FProperty> PropertyIt(StateClass, EFieldIteratorFlags::IncludeSuper); PropertyIt; ++PropertyIt)
 	{
-		UProperty* Property = *PropertyIt;
-		UClass* PropertyClass = CastChecked<UClass>(Property->GetOuter());
-		const bool bIsDelegate = Property->IsA(UMulticastDelegateProperty::StaticClass());
+		FProperty* Property = *PropertyIt;
+		UClass* PropertyClass = Cast<UClass>(Property->GetOwnerStruct());
+		const bool bIsDelegate = Property->IsA<FMulticastDelegateProperty>();
 		const bool bIsExposedToSpawn = UEdGraphSchema_K2::IsPropertyExposedOnSpawn(Property);
 		const bool bIsSettableExternally = !Property->HasAnyPropertyFlags(CPF_DisableEditOnInstance);
 
@@ -179,7 +177,7 @@ void UK2Node_State::AllocateDefaultPins()
 			Property->HasAllPropertyFlags(CPF_BlueprintVisible) &&
 			!bIsDelegate)
 		{
-			UEdGraphPin* Pin = CreatePin(EGPD_Input, FName(), FName(), nullptr, Property->GetFName());
+			UEdGraphPin* Pin = CreatePin(EGPD_Input, NAME_None, Property->GetFName());
 			const bool bPinGood = (Pin != nullptr) && K2Schema->ConvertPropertyToPinType(Property, /*out*/ Pin->PinType);
 
 			// Copy tooltip from the property.
@@ -301,10 +299,11 @@ void UK2Node_State::ExpandNode(FKismetCompilerContext& CompilerContext, UEdGraph
 	
 	// Original line below:
 	//for (TFieldIterator<UMulticastDelegateProperty> PropertyIt(ProxyClass); PropertyIt && bIsErrorFree; ++PropertyIt)
-	for (TFieldIterator<UMulticastDelegateProperty> PropertyIt(ProxyClass, EFieldIteratorFlags::IncludeSuper); PropertyIt && bIsErrorFree; ++PropertyIt)
+	for (TFieldIterator<FMulticastDelegateProperty> PropertyIt(ProxyClass, EFieldIteratorFlags::IncludeSuper); PropertyIt && bIsErrorFree; ++PropertyIt)
 #pragma endregion //OUR_CODE
 	{
-		bIsErrorFree &= FBaseAsyncTaskHelper::HandleDelegateImplementation(*PropertyIt, VariableOutputs, ProxyObjectPin, LastThenPin, this, SourceGraph, CompilerContext);
+		UEdGraphPin* LastActivatedThenPin = nullptr;
+		bIsErrorFree &= FBaseAsyncTaskHelper::HandleDelegateImplementation(*PropertyIt, VariableOutputs, ProxyObjectPin, LastThenPin, LastActivatedThenPin, this, SourceGraph, CompilerContext);
 	}
 	
 	if (CallCreateProxyObjectNode->FindPinChecked(UEdGraphSchema_K2::PN_Then) == LastThenPin)

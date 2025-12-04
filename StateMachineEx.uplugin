@@ -2,10 +2,11 @@
 	"FileVersion": 3,
 	"Version": 1,
 	"VersionName": "1.0",
+	"EngineVersion": "5.6.0",
 	"FriendlyName": "StateMachineEx",
-	"Description": "Bluperint State Machine",
+	"Description": "Blueprint State Machine",
 	"Category": "Other",
-	"CreatedBy": "Igor Karatayev",
+	"CreatedBy": "Enigma-IX",
 	"CreatedByURL": "",
 	"DocsURL": "",
 	"MarketplaceURL": "",
@@ -23,6 +24,15 @@
 			"Name": "StateMachineDeveloperEx",
 			"Type": "UncookedOnly",
 			"LoadingPhase": "Default"
+		},
+		{
+			"Name": "StateMachineExDebugging",
+			"Type": "Runtime",
+			"LoadingPhase": "Default",
+			"TargetConfigurationDenyList": [
+				"Test",
+				"Shipping"
+			]
 		}
 	]
 }

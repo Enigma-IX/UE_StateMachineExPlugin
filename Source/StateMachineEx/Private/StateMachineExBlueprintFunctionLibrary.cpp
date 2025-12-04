@@ -9,12 +9,12 @@ UStateMachine* UStateMachineExStatics::GuessStateMachine(UObject* WorldContextOb
 	if (IsValid(StateMachine))
 		return StateMachine;
 
-	for (UObjectProperty* ObjecProperty : TFieldRange<UObjectProperty>(WorldContextObject->GetClass(), EFieldIteratorFlags::IncludeSuper))
+	for (TFieldIterator<FObjectProperty> ObjectProperty(WorldContextObject->GetClass(), EFieldIteratorFlags::IncludeSuper); ObjectProperty; ++ObjectProperty)
 	{
-		if (ObjecProperty->PropertyClass == UStateMachine::StaticClass()
-			|| ObjecProperty->PropertyClass->IsChildOf(UStateMachine::StaticClass()))
+		if (ObjectProperty->PropertyClass == UStateMachine::StaticClass()
+			|| ObjectProperty->PropertyClass->IsChildOf(UStateMachine::StaticClass()))
 		{
-			return Cast<UStateMachine>(ObjecProperty->GetPropertyValue_InContainer(WorldContextObject));
+			return Cast<UStateMachine>(ObjectProperty->GetPropertyValue_InContainer(WorldContextObject));
 		}
 	}
 
